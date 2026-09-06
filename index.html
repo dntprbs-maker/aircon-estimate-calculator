@@ -862,6 +862,9 @@
     }
 
 
+/* 이번만 단가표 */
+.one-time-unit{display:inline-flex;align-items:center;gap:5px}.one-time-unit input{width:112px;height:36px;border:1.5px solid #2563eb;border-radius:9px;padding:0 8px;text-align:right;font-size:14px;font-weight:800;background:#eff6ff}.one-time-note{margin-top:7px;padding:8px 10px;border-radius:10px;background:#fff7ed;color:#9a3412;font-size:12px;font-weight:800}@media(max-width:560px){.one-time-unit input{width:104px}}
+
 /* 거래처별 가격표 관리 - M1.3.1 확장 */
 .profile-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}.profile-row button{height:44px;border:1px solid var(--line);border-radius:12px;background:#f8fafc;padding:0 14px;font-weight:800;cursor:pointer}.profile-modal{position:fixed;inset:0;background:rgba(15,23,42,.58);z-index:100;display:flex;align-items:flex-end;justify-content:center}.profile-modal.hidden{display:none!important}.profile-sheet{width:min(820px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:22px 22px 0 0;padding:18px 16px calc(22px + env(safe-area-inset-bottom))}.profile-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.profile-head strong{font-size:19px}.profile-close{width:38px;height:38px;border:0;border-radius:50%;background:#eef2f7;font-size:22px;cursor:pointer}.profile-editor-controls{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin:12px 0}.profile-price-row{display:grid;grid-template-columns:minmax(0,1fr) 130px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #edf1f5}.profile-price-row span{font-size:13px;font-weight:800}.profile-price-row input{width:100%;height:40px;border:1px solid var(--line);border-radius:10px;padding:0 9px;text-align:right}.profile-save{width:100%;height:46px;border:0;border-radius:12px;background:var(--primary);color:#fff;font-weight:900;margin-top:12px;cursor:pointer}.profile-saved{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid #edf1f5}.profile-saved button{border:0;border-radius:8px;padding:7px 9px;cursor:pointer}.profile-saved .edit{background:#eaf1ff;color:#1d4ed8}.profile-saved .delete{background:#fff1f2;color:#dc2626}@media(max-width:560px){.profile-row{grid-template-columns:1fr 92px}.profile-editor-controls{grid-template-columns:1fr}.profile-price-row{grid-template-columns:minmax(0,1fr) 112px}}
 
@@ -890,7 +893,7 @@
       </div>
     </div>
   </section>
-<section class="card no-print" id="priceProfileCard"><div class="section-title section-title-blue">가격표</div><div class="profile-row"><div><label for="priceProfileSelect">적용 가격표</label><select id="priceProfileSelect" onchange="selectPriceProfile()"><option value="base">기본 가격표</option></select></div><button type="button" onclick="openPriceProfileManager()">가격표 관리</button></div><div class="hint">기본 가격표 전체를 복사해 거래처별 가격표를 만들 수 있습니다. 원본 가격표는 변경되지 않습니다.</div></section>
+<section class="card no-print" id="priceProfileCard"><div class="section-title section-title-blue">가격표</div><div class="profile-row"><div><label for="priceProfileSelect">적용 가격표</label><select id="priceProfileSelect" onchange="selectPriceProfile()"><option value="base">기본 가격표</option></select></div><button type="button" onclick="openPriceProfileManager()">가격표 관리</button></div><div class="hint">기본 가격표 전체를 복사해 거래처별 가격표를 만들 수 있습니다. 원본 가격표는 변경되지 않습니다.</div><div id="oneTimeNotice" class="one-time-note" style="display:none">이번 견적에만 적용됩니다. 저장된 가격표 원본은 변경되지 않습니다.</div></section>
 <details class="card no-print collapsible-card" id="priceSettings">
     <summary>
       <div>
@@ -1153,9 +1156,13 @@ function cloneBaseMatrix(){const m={};products.forEach(p=>m[p.id]={off:p.off.map
 function normalizeProfileMatrix(profile){const b=cloneBaseMatrix(),m=profile&&profile.matrix?profile.matrix:{};products.forEach(p=>['off','summer'].forEach(se=>[0,1,2].forEach(t=>[0,1].forEach(k=>{if(m[p.id]&&m[p.id][se]&&m[p.id][se][t]&&Number.isFinite(+m[p.id][se][t][k]))b[p.id][se][t][k]=+m[p.id][se][t][k]}))));return b}
 function persistProfiles(){localStorage.setItem(PROFILE_KEY,JSON.stringify(priceProfiles))}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function refreshProfileSelect(){const e=document.getElementById('priceProfileSelect');if(!e)return;e.innerHTML='<option value="base">기본 가격표</option>'+priceProfiles.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');if(activeProfileId!=='base'&&!priceProfiles.some(x=>x.id===activeProfileId))activeProfileId='base';e.value=activeProfileId}
-function selectPriceProfile(){activeProfileId=document.getElementById('priceProfileSelect').value;calculate()}
-function getActiveUnit(p,t,k){if(activeProfileId==='base')return p[season][t][k];const x=priceProfiles.find(x=>x.id===activeProfileId);return x?normalizeProfileMatrix(x)[p.id][season][t][k]:p[season][t][k]}
+function refreshProfileSelect(){const e=document.getElementById('priceProfileSelect');if(!e)return;e.innerHTML='<option value="base">기본 가격표</option>'+priceProfiles.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')+'<option value="oneTime">이번만 단가표</option>';if(activeProfileId!=='base'&&activeProfileId!=='oneTime'&&!priceProfiles.some(x=>x.id===activeProfileId))activeProfileId='base';e.value=activeProfileId}
+let oneTimeSourceId='base',oneTimeUnits={};
+function selectPriceProfile(){const next=document.getElementById('priceProfileSelect').value;if(next==='oneTime'){if(activeProfileId!=='oneTime')oneTimeSourceId=activeProfileId;oneTimeUnits={};}activeProfileId=next;calculate()}
+function getProfileUnit(profileId,p,t,k){if(profileId==='base'||profileId==='oneTime')return p[season][t][k];const x=priceProfiles.find(x=>x.id===profileId);return x?normalizeProfileMatrix(x)[p.id][season][t][k]:p[season][t][k]}
+function oneTimeKey(p,t,k){return `${p.id}|${season}|${t}|${k}`}
+function getActiveUnit(p,t,k){if(activeProfileId!=='oneTime')return getProfileUnit(activeProfileId,p,t,k);const key=oneTimeKey(p,t,k);return Object.prototype.hasOwnProperty.call(oneTimeUnits,key)?oneTimeUnits[key]:getProfileUnit(oneTimeSourceId,p,t,k)}
+function setOneTimeUnit(id,value){if(activeProfileId!=='oneTime')return;const p=products.find(x=>x.id===id);if(!p)return;const total=products.reduce((sum,x)=>sum+(parseInt(qtyInputs[x.id]?.value)||0),0),t=getTier(total),k=priceType==='service'?0:1,key=oneTimeKey(p,t,k),n=parseInt(String(value).replace(/[^0-9]/g,''),10);if(Number.isFinite(n)&&n>=0)oneTimeUnits[key]=n;calculate()}
 function openPriceProfileManager(id=null){editingProfileId=id;const cur=id?priceProfiles.find(x=>x.id===id):(activeProfileId==='base'?null:priceProfiles.find(x=>x.id===activeProfileId));profileDraft=cur?normalizeProfileMatrix(cur):(activeProfileId==='base'?cloneBaseMatrix():normalizeProfileMatrix(priceProfiles.find(x=>x.id===activeProfileId)));document.getElementById('profileName').value=id&&cur?cur.name:'';document.getElementById('priceProfileModal').classList.remove('hidden');renderProfileEditor();renderSavedProfileList()}
 function closePriceProfileManager(){document.getElementById('priceProfileModal').classList.add('hidden');editingProfileId=null;profileDraft=null}
 function renderProfileEditor(){if(!profileDraft)return;const se=document.getElementById('profileSeason').value,t=+document.getElementById('profileTier').value,k=+document.getElementById('profileType').value;document.getElementById('profilePriceEditor').innerHTML=products.map(p=>`<div class="profile-price-row"><span>${esc(p.name)}</span><input type="number" min="0" step="100" value="${profileDraft[p.id][se][t][k]}" onchange="setDraftPrice('${p.id}',this.value)"></div>`).join('')}
@@ -1254,6 +1261,7 @@ function updatePriceSettingSummary(){
 
 function calculate(){
   updatePriceSettingSummary();
+  const oneTimeNotice=document.getElementById('oneTimeNotice');if(oneTimeNotice)oneTimeNotice.style.display=activeProfileId==='oneTime'?'block':'none';
   const total = products.reduce((sum,p)=>sum+(parseInt(qtyInputs[p.id]?.value)||0),0);
   const tier = getTier(total);
   const priceIndex = priceType === 'service' ? 0 : 1;
@@ -1264,7 +1272,7 @@ function calculate(){
   products.forEach(p=>{
     const qty = parseInt(qtyInputs[p.id]?.value)||0;
     const unit = getActiveUnit(p, tier, priceIndex);
-    document.getElementById(`unit-${p.id}`).textContent = `단가 ${fmt(unit)}`;
+    const unitEl=document.getElementById(`unit-${p.id}`);if(activeProfileId==='oneTime'){unitEl.innerHTML=`<span class="one-time-unit"><span>단가</span><input type="text" inputmode="numeric" aria-label="${esc(p.name)} 이번만 단가" value="${new Intl.NumberFormat('ko-KR').format(unit)}" data-id="${p.id}"></span>`;const inp=unitEl.querySelector('input');inp.addEventListener('change',()=>setOneTimeUnit(p.id,inp.value));inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();inp.blur()}})}else{unitEl.textContent=`단가 ${fmt(unit)}`}
     const itemEl = qtyInputs[p.id].closest('.item');
     itemEl.classList.toggle('hidden-selected', qty === 0);
     if(qty>0){
@@ -1299,6 +1307,7 @@ function resetQuote(){
   products.forEach(p=>qtyInputs[p.id].value=0);
   document.getElementById('customer').value='';
   document.getElementById('memo').value='';
+  oneTimeUnits={};
   calculate();
 }
 
