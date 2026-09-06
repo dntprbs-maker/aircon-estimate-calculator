@@ -2,6 +2,7 @@ name: Add price profile management
 on:
   push:
     paths:
+      - 'tools/add_price_profiles.py'
       - '.github/workflows/add-price-profiles.yml'
 permissions:
   contents: write
@@ -10,138 +11,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Patch original M1.3.1 without rebuilding it
-        shell: python
-        run: |
-          from pathlib import Path
-          p=Path('index.html')
-          s=p.read_text(encoding='utf-8')
-          if 'priceProfileCard' in s:
-              print('already patched'); raise SystemExit
-          css=r'''
-    /* 거래처별 가격표 관리 - M1.3.1 확장 */
-    .profile-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}
-    .profile-row button,.profile-btn{height:44px;border:1px solid var(--line);border-radius:12px;background:#f8fafc;padding:0 14px;font-weight:800;cursor:pointer}
-    .profile-modal{position:fixed;inset:0;background:rgba(15,23,42,.58);z-index:100;display:flex;align-items:flex-end;justify-content:center}
-    .profile-modal.hidden{display:none!important}
-    .profile-sheet{width:min(820px,100%);max-height:92vh;overflow:auto;background:#fff;border-radius:22px 22px 0 0;padding:18px 16px calc(22px + env(safe-area-inset-bottom))}
-    .profile-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
-    .profile-head strong{font-size:19px}.profile-close{width:38px;height:38px;border:0;border-radius:50%;background:#eef2f7;font-size:22px;cursor:pointer}
-    .profile-editor-controls{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin:12px 0}
-    .profile-editor-controls select{height:40px}
-    .profile-price-row{display:grid;grid-template-columns:minmax(0,1fr) 130px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #edf1f5}
-    .profile-price-row span{font-size:13px;font-weight:800}.profile-price-row input{width:100%;height:40px;border:1px solid var(--line);border-radius:10px;padding:0 9px;text-align:right}
-    .profile-save{width:100%;height:46px;border:0;border-radius:12px;background:var(--primary);color:#fff;font-weight:900;margin-top:12px;cursor:pointer}
-    .profile-saved{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid #edf1f5}.profile-saved button{border:0;border-radius:8px;padding:7px 9px;cursor:pointer}.profile-saved .edit{background:#eaf1ff;color:#1d4ed8}.profile-saved .delete{background:#fff1f2;color:#dc2626}
-    @media(max-width:560px){.profile-row{grid-template-columns:1fr 92px}.profile-editor-controls{grid-template-columns:1fr}.profile-price-row{grid-template-columns:minmax(0,1fr) 112px}}
-'''
-          s=s.replace('</style>',css+'\n</style>',1)
-          card=r'''
-<section class="card no-print" id="priceProfileCard">
-  <div class="section-title section-title-blue">가격표</div>
-  <div class="profile-row">
-    <div><label for="priceProfileSelect">적용 가격표</label><select id="priceProfileSelect" onchange="selectPriceProfile()"><option value="base">기본 가격표</option></select></div>
-    <button type="button" onclick="openPriceProfileManager()">가격표 관리</button>
-  </div>
-  <div class="hint">기본 가격표 전체를 복사해 거래처별 가격표를 만들 수 있습니다. 원본 가격표는 변경되지 않습니다.</div>
-</section>
-'''
-          s=s.replace('<details class="card no-print collapsible-card" id="priceSettings">',card+'\n<details class="card no-print collapsible-card" id="priceSettings">',1)
-          modal=r'''
-<div id="priceProfileModal" class="profile-modal hidden" onclick="if(event.target===this)closePriceProfileManager()">
-  <div class="profile-sheet">
-    <div class="profile-head"><strong>가격표 관리</strong><button type="button" class="profile-close" onclick="closePriceProfileManager()">×</button></div>
-    <label for="profileName">가격표 이름</label><input id="profileName" type="text" placeholder="예: 시립광명어린이집" style="width:100%;height:44px;border:1px solid var(--line);border-radius:12px;padding:0 12px">
-    <div class="hint">새 가격표는 현재 선택한 가격표의 전체 단가표를 복사합니다. 아래에서 조건별 단가를 수정하세요.</div>
-    <div class="profile-editor-controls">
-      <select id="profileSeason" onchange="renderProfileEditor()"><option value="off">비수기</option><option value="summer" selected>성수기</option></select>
-      <select id="profileTier" onchange="renderProfileEditor()"><option value="0">1~9대</option><option value="1">10~29대</option><option value="2">30대 이상</option></select>
-      <select id="profileType" onchange="renderProfileEditor()"><option value="0">수행단가</option><option value="1" selected>견적 제공단가</option></select>
-    </div>
-    <div id="profilePriceEditor"></div>
-    <button type="button" class="profile-save" onclick="savePriceProfile()">가격표 저장</button>
-    <div style="height:18px"></div><strong>저장된 가격표</strong><div id="savedProfileList"></div>
-  </div>
-</div>
-'''
-          s=s.replace('<div class="actions mobile-floating-bar">',modal+'\n<div class="actions mobile-floating-bar">',1)
-          js=r'''
-
-// ===== 거래처별 가격표 관리 =====
-const PROFILE_KEY='aircon-estimate-price-profiles-v2';
-let priceProfiles=JSON.parse(localStorage.getItem(PROFILE_KEY)||'[]');
-let activeProfileId='base';
-let editingProfileId=null;
-let profileDraft=null;
-function cloneBaseMatrix(){
-  const matrix={};
-  products.forEach(p=>matrix[p.id]={off:p.off.map(x=>[...x]),summer:p.summer.map(x=>[...x])});
-  return matrix;
-}
-function normalizeProfileMatrix(profile){
-  const base=cloneBaseMatrix(), m=profile&&profile.matrix?profile.matrix:{};
-  products.forEach(p=>['off','summer'].forEach(se=>[0,1,2].forEach(t=>[0,1].forEach(k=>{
-    if(m[p.id]&&m[p.id][se]&&m[p.id][se][t]&&Number.isFinite(+m[p.id][se][t][k])) base[p.id][se][t][k]=+m[p.id][se][t][k];
-  }))));
-  return base;
-}
-function persistProfiles(){localStorage.setItem(PROFILE_KEY,JSON.stringify(priceProfiles))}
-function refreshProfileSelect(){
-  const el=document.getElementById('priceProfileSelect'); if(!el)return;
-  el.innerHTML='<option value="base">기본 가격표</option>'+priceProfiles.map(x=>`<option value="${x.id}">${escapeHtml(x.name)}</option>`).join('');
-  if(activeProfileId!=='base'&&!priceProfiles.some(x=>x.id===activeProfileId))activeProfileId='base';
-  el.value=activeProfileId;
-}
-function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function selectPriceProfile(){activeProfileId=document.getElementById('priceProfileSelect').value;calculate()}
-function getActiveUnit(p,tier,priceIndex){
-  if(activeProfileId==='base')return p[season][tier][priceIndex];
-  const prof=priceProfiles.find(x=>x.id===activeProfileId);
-  if(!prof)return p[season][tier][priceIndex];
-  const m=normalizeProfileMatrix(prof); return m[p.id][season][tier][priceIndex];
-}
-function openPriceProfileManager(id=null){
-  editingProfileId=id;
-  const current=id?priceProfiles.find(x=>x.id===id):(activeProfileId==='base'?null:priceProfiles.find(x=>x.id===activeProfileId));
-  profileDraft=current?normalizeProfileMatrix(current):(activeProfileId==='base'?cloneBaseMatrix():normalizeProfileMatrix(priceProfiles.find(x=>x.id===activeProfileId)));
-  document.getElementById('profileName').value=id&&current?current.name:'';
-  document.getElementById('priceProfileModal').classList.remove('hidden');
-  renderProfileEditor();renderSavedProfileList();
-}
-function closePriceProfileManager(){document.getElementById('priceProfileModal').classList.add('hidden');editingProfileId=null;profileDraft=null}
-function renderProfileEditor(){
-  if(!profileDraft)return;
-  const se=document.getElementById('profileSeason').value,t=+document.getElementById('profileTier').value,k=+document.getElementById('profileType').value;
-  document.getElementById('profilePriceEditor').innerHTML=products.map(p=>`<div class="profile-price-row"><span>${escapeHtml(p.name)}</span><input type="number" min="0" step="100" value="${profileDraft[p.id][se][t][k]}" onchange="setDraftPrice('${p.id}',this.value)"></div>`).join('');
-}
-function setDraftPrice(id,v){const se=document.getElementById('profileSeason').value,t=+document.getElementById('profileTier').value,k=+document.getElementById('profileType').value;profileDraft[id][se][t][k]=Math.max(0,+v||0)}
-function savePriceProfile(){
-  const name=document.getElementById('profileName').value.trim(); if(!name)return alert('가격표 이름을 입력하세요.');
-  if(!profileDraft)return;
-  if(editingProfileId){const i=priceProfiles.findIndex(x=>x.id===editingProfileId);if(i>=0)priceProfiles[i]={...priceProfiles[i],name,matrix:profileDraft};activeProfileId=editingProfileId}
-  else{const id='p'+Date.now();priceProfiles.push({id,name,matrix:profileDraft});activeProfileId=id}
-  persistProfiles();refreshProfileSelect();closePriceProfileManager();calculate();
-}
-function renderSavedProfileList(){
-  const el=document.getElementById('savedProfileList');if(!el)return;
-  el.innerHTML=priceProfiles.length?priceProfiles.map(x=>`<div class="profile-saved"><span>${escapeHtml(x.name)}</span><div><button type="button" class="edit" onclick="openPriceProfileManager('${x.id}')">수정</button> <button type="button" class="delete" onclick="deletePriceProfile('${x.id}')">삭제</button></div></div>`).join(''):'<div class="hint">저장된 거래처 가격표가 없습니다.</div>';
-}
-function deletePriceProfile(id){
-  const x=priceProfiles.find(p=>p.id===id);if(!x||!confirm(`“${x.name}” 가격표를 삭제할까요?`))return;
-  priceProfiles=priceProfiles.filter(p=>p.id!==id);if(activeProfileId===id)activeProfileId='base';persistProfiles();refreshProfileSelect();renderSavedProfileList();calculate();
-}
-'''
-          anchor='function getTier(total){'
-          s=s.replace(anchor,js+'\n'+anchor,1)
-          s=s.replace("const unit = p[season][tier][priceIndex];","const unit = getActiveUnit(p, tier, priceIndex);",1)
-          s=s.replace("renderItems();\nbindSegment('seasonSeg'", "refreshProfileSelect();\nrenderItems();\nbindSegment('seasonSeg'",1)
-          p.write_text(s,encoding='utf-8')
-          print('patched',len(s))
+      - name: Patch original M1.3.1
+        run: python tools/add_price_profiles.py
       - name: Commit patched calculator
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html
-          git diff --cached --quiet && exit 0
+          if git diff --cached --quiet; then exit 0; fi
           git commit -m "add customer price profile management to M1.3.1"
           git push
